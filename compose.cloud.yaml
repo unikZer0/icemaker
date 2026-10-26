@@ -1,0 +1,36 @@
+# Cloud overlay: requires APP_DOMAIN and readable broker certificates in ./certs.
+# docker compose -f compose.yaml -f compose.cloud.yaml up -d --build
+services:
+  icemaker:
+    environment:
+      AUTH_ENABLED: "true"
+      APP_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN in .env}
+      MQTT_TLS: "true"
+      MQTT_PORT: "8883"
+      MQTT_ADVERTISED_HOST: ${APP_DOMAIN}
+      MQTT_ADVERTISED_PORT: "8883"
+      MQTT_TLS_CERT: /certs/fullchain.pem
+      MQTT_TLS_KEY: /certs/privkey.pem
+    ports: !override
+      - "127.0.0.1:${PORT:-3100}:3100"
+      - "8883:8883"
+    volumes:
+      - ./certs:/certs:ro
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      icemaker:
+        condition: service_healthy
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,21 @@
+{
+  "name": "icemaker-cloudmeter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local LEAFTECH CloudMeter dashboard with USB and Wi-Fi MQTT",
+  "scripts": {
+    "start": "node --env-file=.env server.js",
+    "usb": "node --env-file=.env scripts/usb-bridge.js",
+    "test": "node --test",
+    "check": "node --check server.js && node --check public/app.js && node --check public/machines.js && node --check public/login.js && node --check public/workspace.js && node --check lib/database.js && node --check lib/fleet.js && node --check lib/auth.js && node --check lib/notifications.js && node --check scripts/usb-bridge.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "aedes": "0.51.3",
+    "mqtt": "5.16.0",
+    "pg": "8.23.1",
+    "serialport": "13.0.0"
+  }
+}

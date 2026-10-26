@@ -1,0 +1,68 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { once } = require('node:events');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const os = require('node:os');
+const mqtt = require('mqtt');
+const { start } = require('../server');
+const { authManager } = require('../lib/auth');
+
+test('login, machine registration, isolated MQTT/USB histories, migration and restart persistence', async t => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'icemaker-fleet-test-'));
+  await fs.writeFile(path.join(dataDir, 'readings.ndjson'), JSON.stringify({ ts: Date.now(), source: 'usb', values: { acLineVoltage: 123 } }) + '\n');
+  const options = { dataDir, token: 'original-device', bridgeToken: 'original-bridge', usbMode: 'bridge', auth: { enabled: true, username: 'admin', password: 'a-long-test-password' }, httpPort: 0, mqttPort: 0, mqttHost: '127.0.0.1', quiet: true };
+  let app = start(options), clients = [], cookie = '';
+  t.after(async () => { for (const c of clients) await c.endAsync(true); await app.close(); assert.ok(path.resolve(dataDir).startsWith(path.resolve(os.tmpdir()) + path.sep + 'icemaker-fleet-test-')); await fs.rm(dataDir, { recursive: true, force: true }); });
+  await Promise.all([once(app.server, 'listening'), once(app.mqttServer, 'listening')]);
+  let base = `http://127.0.0.1:${app.server.address().port}`;
+  const get = url => fetch(base + url, { headers: { Cookie: cookie } });
+  const post = (url, data, extra = {}) => fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie, ...extra }, body: JSON.stringify(data) });
+  assert.equal((await get('/api/setup')).status, 401);
+  assert.equal((await get('/api/machines')).status, 401);
+  assert.equal((await get('/api/health')).status, 200);
+  assert.equal((await post('/api/auth/login', { username: 'admin', password: 'wrong' })).status, 401);
+  const login = await post('/api/auth/login', { username: 'admin', password: 'a-long-test-password' });
+  assert.equal(login.status, 200); assert.match(login.headers.get('set-cookie'), /HttpOnly; SameSite=Strict/); cookie = login.headers.get('set-cookie').split(';')[0];
+  assert.equal((await (await get('/api/auth/session')).json()).authenticated, true);
+  assert.equal((await post('/api/machines', { name: '', location: '', connection: 'wifi' })).status, 400);
+  const first = await (await post('/api/machines', { name: 'Shop A', location: 'Bangkok', connection: 'wifi' })).json();
+  const second = await (await post('/api/machines', { name: 'Shop B', location: 'Chiang Mai', connection: 'usb' })).json();
+  const a = await (await get('/api/setup?machine=' + first.id)).json();
+  const b = await (await get('/api/setup?machine=' + second.id)).json();
+  assert.notEqual(a.token, b.token); assert.notEqual(a.bridgeToken, b.bridgeToken); assert.notEqual(a.token, a.bridgeToken);
+  const list = await (await get('/api/machines')).json(); assert.equal(list.length, 3); assert.equal(list[1].token, undefined); assert.equal(list[1].bridgeToken, undefined);
+  const connect = async token => { const c = await mqtt.connectAsync(`mqtt://127.0.0.1:${app.mqttServer.address().port}`, { username: token, reconnectPeriod: 0 }); clients.push(c); return c; };
+  const ca = await connect(a.token), cb = await connect(b.token), usb = await connect(b.bridgeToken);
+  await ca.publishAsync('v1/devices/me/telemetry', JSON.stringify({ machineId: second.id, acLineVoltage: 210 }), { qos: 1 });
+  await cb.publishAsync('v1/devices/me/telemetry', JSON.stringify({ acLineVoltage: 220 }), { qos: 1 });
+  await usb.publishAsync('icemaker/usb/status', JSON.stringify({ connected: true, path: 'COM12', session: 'b-only' }), { qos: 1 });
+  await usb.publishAsync('v1/devices/me/telemetry', JSON.stringify({ acLineVoltage: 230 }), { qos: 1 });
+  let state;
+  for (let i = 0; i < 100; i++) { state = await (await get('/api/state?machine=' + second.id)).json(); if (state.latest.usb.acLineVoltage) break; await new Promise(r => setTimeout(r, 20)); }
+  assert.equal(state.latest.usb.acLineVoltage.value, 230); assert.equal(state.latest.wifi.acLineVoltage.value, 220);
+  const sa = await (await get('/api/state?machine=' + first.id)).json(); assert.equal(sa.latest.wifi.acLineVoltage.value, 210); assert.deepEqual(sa.latest.usb, {});
+  const ah = await (await get(`/api/history?machine=${first.id}&source=wifi&hours=1`)).json(); assert.deepEqual(ah.map(r => r.values.acLineVoltage), [210]);
+  const original = await (await get('/api/history?source=usb&hours=1')).json(); assert.deepEqual(original.map(r => r.values.acLineVoltage), [123]);
+  assert.equal((await get('/api/state?machine=does-not-exist')).status, 404);
+  assert.equal((await post('/api/machines/' + first.id, { name: 'Renamed Shop A', location: 'Bangkok', connection: 'wifi' })).status, 200);
+  assert.equal((await post('/api/machines', {}, { Origin: 'https://evil.example' })).status, 403);
+  for (const c of clients) await c.endAsync(true); clients = [];
+  await app.close(); app = start(options);
+  await Promise.all([once(app.server, 'listening'), once(app.mqttServer, 'listening')]); base = `http://127.0.0.1:${app.server.address().port}`;
+  assert.equal((await get('/api/machines')).status, 401);
+  const again = await post('/api/auth/login', { username: 'admin', password: 'a-long-test-password' }); cookie = again.headers.get('set-cookie').split(';')[0];
+  const saved = await (await get('/api/setup?machine=' + first.id)).json(); assert.equal(saved.name, 'Renamed Shop A'); assert.equal(saved.token, a.token); assert.equal(saved.bridgeToken, a.bridgeToken);
+  assert.equal((await (await get(`/api/history?machine=${second.id}&source=usb&hours=1`)).json())[0].values.acLineVoltage, 230);
+  await post('/api/auth/logout', {}); assert.equal((await get('/api/machines')).status, 401);
+});
+
+test('cloud configuration requires login and HTTPS, with secure cookies and rate limiting', () => {
+  assert.throws(() => authManager({ enabled: false, origin: 'https://ice.example.com' }));
+  assert.throws(() => authManager({ enabled: true, password: 'long-enough-password', origin: 'http://ice.example.com' }));
+  const auth = authManager({ enabled: true, password: 'long-enough-password', origin: 'https://ice.example.com' });
+  const req = { headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+  const good = auth.login(req, { username: 'admin', password: 'long-enough-password' }); assert.match(good.cookie, /; Secure/);
+  for (let i = 0; i < 10; i++) assert.equal(auth.login(req, { username: 'admin', password: 'bad' }).status, 401);
+  assert.equal(auth.login(req, { username: 'admin', password: 'bad' }).status, 429);
+});

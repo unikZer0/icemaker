@@ -1,0 +1,54 @@
+name: icemaker2
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-icemaker}
+      POSTGRES_USER: ${POSTGRES_USER:-icemaker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run node scripts/setup-env.js first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  icemaker:
+    build: .
+    image: icemaker2:local
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      STORAGE_BACKEND: postgres
+      PGHOST: database
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:-icemaker}
+      PGUSER: ${POSTGRES_USER:-icemaker}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run node scripts/setup-env.js first}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?Run node scripts/setup-env.js first}
+      PORT: "3100"
+      HTTP_HOST: 0.0.0.0
+      MQTT_HOST: 0.0.0.0
+      MQTT_PORT: "1884"
+      MQTT_ADVERTISED_PORT: ${MQTT_PORT:-1884}
+      DATA_DIR: /app/data
+      USB_MODE: bridge
+    ports:
+      - "127.0.0.1:${PORT:-3100}:3100"
+      - "${MQTT_PORT:-1884}:1884"
+    volumes:
+      - icemaker-data:/app/data
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+volumes:
+  icemaker-data:
+  postgres-data:

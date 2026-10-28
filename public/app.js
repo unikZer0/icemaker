@@ -40,6 +40,7 @@ function render() {
   $('live-status').textContent = fresh ? `กำลังรับข้อมูลผ่าน ${src === 'usb' ? 'USB' : 'Wi-Fi'}` : connection.connected ? 'เชื่อมต่อแล้ว · กำลังรอข้อมูลใหม่' : 'ไม่ได้เชื่อมต่ออุปกรณ์';
   $('last-seen').textContent = connection.lastSeen ? `ข้อมูลล่าสุด ${fmtTime(connection.lastSeen)} · กรุงเทพฯ` : 'ยังไม่ได้รับข้อมูลในการเชื่อมต่อครั้งนี้';
   ['waterTemperature', 'acLineVoltage', 'compressorCurrent', 'compressorPower', 'wifiSignalStrength', 'machineCycleCount', 'machineInterCycleTime'].forEach(key => { $(key).textContent = textValue(value(key, src)); });
+  $('cycle-metrics').hidden = !['machineCycleCount', 'machineInterCycleTime', 'machineCapacity'].some(key => value(key, src) !== undefined);
   const sensor = value('temperatureSensorStatus', src);
   if (falseValue(sensor)) $('waterTemperature').textContent = 'ไม่พร้อมใช้งาน';
   $('temperature-note').textContent = falseValue(sensor) ? 'อุปกรณ์รายงานว่าเซนเซอร์ไม่พร้อมใช้งาน (false)' : sensor === undefined ? 'ยังไม่มีข้อมูลสถานะเซนเซอร์' : 'ค่าที่อุปกรณ์รายงาน';
@@ -125,9 +126,9 @@ async function refresh() {
   try {
     state = await api('/api/state'); render();
     const src = source(); const reports = await api(`/api/history?hours=${$('range').value}&source=${src}`);
-    historyReports = reports; historySource = src; drawHistory('compressorCurrent', 'current'); drawHistory('waterTemperature', 'temperature');
+    historyReports = reports; historySource = src; drawHistory('compressorCurrent', 'current'); drawHistory('waterTemperature', 'temperature'); $('overview').classList.remove('is-loading'); $('overview').setAttribute('aria-busy', 'false');
     notice('');
-  } catch (error) { notice('ไม่สามารถอัปเดตแดชบอร์ดได้: ' + error.message); $('live-status').textContent = 'การเชื่อมต่อแดชบอร์ดขัดข้อง'; $('live-dot').classList.remove('live'); for (const key of ['waterTemperature', 'acLineVoltage', 'compressorCurrent', 'compressorPower', 'wifiSignalStrength', 'machineCycleCount', 'machineInterCycleTime']) $(key).textContent = '—'; $('machine-values').replaceChildren(); }
+  } catch (error) { $('overview').classList.remove('is-loading'); $('overview').setAttribute('aria-busy', 'false'); notice('ไม่สามารถอัปเดตแดชบอร์ดได้: ' + error.message); $('live-status').textContent = 'การเชื่อมต่อแดชบอร์ดขัดข้อง'; $('live-dot').classList.remove('live'); for (const key of ['waterTemperature', 'acLineVoltage', 'compressorCurrent', 'compressorPower', 'wifiSignalStrength', 'machineCycleCount', 'machineInterCycleTime']) $(key).textContent = '—'; $('machine-values').replaceChildren(); }
   finally { refreshing = false; }
 }
 function action(id, fn) { $(id).addEventListener('click', async () => { $(id).disabled = true; try { await fn(); } catch (error) { notice(error.message); } finally { $(id).disabled = false; } }); }
@@ -143,7 +144,7 @@ async function init() {
     for (const machine of machines) { const option = document.createElement('option'); option.value = machine.id; option.textContent = machine.name; $('machine-picker').append(option); }
     if (machineId) $('machine-picker').value = machineId;
     $('machine-picker').addEventListener('change', () => location.assign('/dashboard?machine=' + encodeURIComponent($('machine-picker').value)));
-  } catch (error) { notice(error.message); return; }
+  } catch (error) { $('overview').classList.remove('is-loading'); $('overview').setAttribute('aria-busy', 'false'); notice(error.message); return; }
   await refresh(); setInterval(refresh, 3000);
 }
 action('logout', async () => { await api('/api/auth/logout', {}); location.assign('/login'); });

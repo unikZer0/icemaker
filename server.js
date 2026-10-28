@@ -162,6 +162,7 @@ function start(options = {}) {
   const mqttTls = options.mqttTls ?? process.env.MQTT_TLS === 'true';
   const mqttServer = mqttTls ? tls.createServer({ key: fs.readFileSync(process.env.MQTT_TLS_KEY), cert: fs.readFileSync(process.env.MQTT_TLS_CERT), minVersion: 'TLSv1.2' }, broker.handle) : net.createServer(broker.handle);
   mqttServer.on('error', error => { state.wifi.error = error.code === 'EADDRINUSE' ? 'พอร์ต MQTT ถูกใช้งานอยู่ กรุณาเปลี่ยน MQTT_PORT เป็นพอร์ตว่างแล้วเริ่มระบบใหม่' : 'เซิร์ฟเวอร์ MQTT ไม่พร้อมใช้งาน: ' + error.code; event(state.wifi.error); });
+  async function serialPorts() { try { return await SerialPort.list(); } catch { return []; } }
   const mqttPort = options.mqttPort ?? Number(process.env.MQTT_PORT || 1884);
   mqttServer.listen(mqttPort, options.mqttHost || process.env.MQTT_HOST || '0.0.0.0');
   const addresses = () => process.env.MQTT_ADVERTISED_HOST ? [process.env.MQTT_ADVERTISED_HOST] : Object.values(os.networkInterfaces()).flat().filter(a => a.family === 'IPv4' && !a.internal).map(a => a.address);
@@ -234,7 +235,7 @@ function start(options = {}) {
       const machineState = fleet.states.get(machineId);
       if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, { ...machineState, machine: { id: machine.id, name: machine.name, location: machine.location, connection: machine.connection }, usbMode, now: Date.now(), freshnessMs: 90000 });
       if (req.method === 'GET' && url.pathname === '/api/setup') return json(res, 200, { id: machine.id, name: machine.name, location: machine.location, connection: machine.connection, addresses: addresses(), mqttPort: Number(process.env.MQTT_ADVERTISED_PORT) || mqttServer.address()?.port || mqttPort, protocol: mqttTls ? 'mqtts' : 'mqtt', token: machine.token, bridgeToken: machine.bridgeToken, topics: [...TOPICS] });
-      if (req.method === 'GET' && url.pathname === '/api/ports') return json(res, 200, usbMode === 'bridge' ? [] : await SerialPort.list());
+      if (req.method === 'GET' && url.pathname === '/api/ports') return json(res, 200, usbMode === 'bridge' ? [] : await serialPorts());
       if (req.method === 'GET' && url.pathname === '/api/history') {
         const hours = Number(url.searchParams.get('hours') || 1);
         if (![1, 6, 24].includes(hours)) return json(res, 400, { error: 'กรุณาเลือกช่วงเวลา 1, 6 หรือ 24 ชั่วโมง' });
@@ -247,22 +248,22 @@ function start(options = {}) {
         if (url.pathname.startsWith('/api/usb/') && usbMode === 'bridge') return json(res, 409, { error: 'USB จัดการผ่านตัวเชื่อมต่อบน Windows กรุณาเรียกใช้ npm run usb บน Windows' });
         if (url.pathname.startsWith('/api/usb/') && machineId !== fleet.originalId) return json(res, 409, { error: 'ใช้เกตเวย์ USB กับโทเคนของเครื่องนี้ ปุ่มควบคุม USB โดยตรงใช้ได้เฉพาะเครื่องแรกบนคอมพิวเตอร์นี้' });
         if (url.pathname === '/api/usb/connect') {
-          const ports = await SerialPort.list();
+          const ports = await serialPorts();
           if (!ports.some(p => p.path === input.path) || ![9600, 19200, 38400, 57600, 115200].includes(input.baudRate)) return json(res, 400, { error: 'กรุณาเลือกพอร์ตที่ตรวจพบและอัตราบอดที่รองรับ' });
           await connectUsb(input.path, input.baudRate); return json(res, 200, { ok: true });
         }
         if (url.pathname === '/api/usb/disconnect') { await disconnectUsb(); return json(res, 200, { ok: true }); }
       }
       if (req.method !== 'GET') return json(res, 404, { error: 'ไม่พบเส้นทางที่ร้องขอ' });
-      const files = { '/': 'workspace.html', '/home': 'workspace.html', '/alarms': 'workspace.html', '/dashboards': 'workspace.html', '/notifications': 'workspace.html', '/devices': 'machines.html', '/machines': 'machines.html', '/dashboard': 'index.html', '/login': 'login.html', '/login.js': 'login.js', '/machines.js': 'machines.js', '/app.js': 'app.js', '/style.css': 'style.css', '/navigation.js': 'navigation.js', '/workspace.js': 'workspace.js', '/workspace.css': 'workspace.css' };
+      const files = { '/': 'workspace.html', '/home': 'workspace.html', '/alarms': 'workspace.html', '/dashboards': 'workspace.html', '/notifications': 'workspace.html', '/devices': 'machines.html', '/machines': 'machines.html', '/dashboard': 'index.html', '/login': 'login.html', '/login.js': 'login.js', '/machines.js': 'machines.js', '/app.js': 'app.js', '/style.css': 'style.css', '/aacc-ui.css': 'aacc-ui.css', '/navigation.js': 'navigation.js', '/workspace.js': 'workspace.js', '/workspace.css': 'workspace.css', '/aacc-mark.png': 'aacc-mark.png', '/fonts/ibm-plex-sans-thai-thai-400-normal.woff2': 'fonts/ibm-plex-sans-thai-thai-400-normal.woff2', '/fonts/ibm-plex-sans-thai-thai-500-normal.woff2': 'fonts/ibm-plex-sans-thai-thai-500-normal.woff2', '/fonts/ibm-plex-sans-thai-thai-600-normal.woff2': 'fonts/ibm-plex-sans-thai-thai-600-normal.woff2', '/fonts/ibm-plex-sans-thai-thai-700-normal.woff2': 'fonts/ibm-plex-sans-thai-thai-700-normal.woff2', '/fonts/ibm-plex-sans-thai-latin-400-normal.woff2': 'fonts/ibm-plex-sans-thai-latin-400-normal.woff2', '/fonts/ibm-plex-sans-thai-latin-500-normal.woff2': 'fonts/ibm-plex-sans-thai-latin-500-normal.woff2', '/fonts/ibm-plex-sans-thai-latin-600-normal.woff2': 'fonts/ibm-plex-sans-thai-latin-600-normal.woff2', '/fonts/ibm-plex-sans-thai-latin-700-normal.woff2': 'fonts/ibm-plex-sans-thai-latin-700-normal.woff2' };
       const file = files[url.pathname];
       if (!file) return json(res, 404, { error: 'ไม่พบข้อมูล' });
-      res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/javascript');
+      res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css' : file.endsWith('.png') ? 'image/png' : file.endsWith('.woff2') ? 'font/woff2' : 'text/javascript');
       fs.createReadStream(path.join(publicDir, file)).pipe(res);
     } catch (error) { json(res, error.status || 500, { error: error.status ? error.message : 'ไม่สามารถดำเนินการได้ กรุณาตรวจสอบการเชื่อมต่ออุปกรณ์แล้วลองอีกครั้ง' }); }
   });
   const httpPort = options.httpPort ?? Number(process.env.PORT || 3100);
-  server.listen(httpPort, options.httpHost || process.env.HTTP_HOST || '127.0.0.1', () => { if (!options.quiet) console.log(`IceMaker: http://localhost:${server.address().port}\nWi-Fi MQTT port: ${mqttPort} (setup in dashboard)`); });
+  server.listen(httpPort, options.httpHost || process.env.HTTP_HOST || '127.0.0.1', () => { if (!options.quiet) console.log(`AACC IceMaker: http://localhost:${server.address().port}\nWi-Fi MQTT port: ${mqttPort} (setup in dashboard)`); });
   server.on('error', error => { console.error('Dashboard listener:', error.code); });
   // Compact the on-disk log every hour; all file operations share the write queue.
   const compact = setInterval(() => {

@@ -4,10 +4,36 @@
   let detailId = new URLSearchParams(location.search).get('event');
   const pages = { home: ['หน้าแรก', 'ภาพรวมอุปกรณ์และเหตุการณ์ที่ต้องตรวจสอบ'], alarms: [detailId ? 'รายละเอียดเหตุการณ์' : 'แจ้งเตือน', 'ตรวจสอบเหตุการณ์วิกฤตและข้อมูลจากอุปกรณ์'], dashboards: ['แดชบอร์ด', 'เลือกเครื่องเพื่อดูค่าปัจจุบันและประวัติการวัด'], notifications: ['ศูนย์การแจ้งเตือน', 'กำหนดผู้รับและเหตุการณ์สำหรับการแจ้งเตือนผ่าน LINE'] };
   const [title, description] = pages[current] || pages.home;
-  document.title = 'IceMaker · ' + title; $('breadcrumb').textContent = $('page-title').textContent = title; $('page-description').textContent = description; $(current + '-view').hidden = false;
-  let alarms = [], refreshing = false, dirty = false, alarmPage = 0, alarmPageSize = 10;
+  document.title = 'AACC IceMaker · ' + title; $('breadcrumb').textContent = $('page-title').textContent = title; $('page-description').textContent = description; $(current + '-view').hidden = false;
+  let alarms = [], refreshing = false, dirty = false, alarmPage = 0, alarmPageSize = 10, initialLoading = false;
   const node = (tag, text, cls) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (cls) el.className = cls; return el; };
   const notice = text => { $('notice').hidden = !text; $('notice').textContent = text; };
+  const skeletonLine = width => { const line = node('span', undefined, 'skeleton-line'); line.style.width = width; line.setAttribute('aria-hidden', 'true'); return line; };
+  function skeletonRows(target, columns, count = 4) {
+    const body = $(target), labels = [...body.closest('table').querySelectorAll('thead th')].map(th => th.textContent.trim()); body.setAttribute('aria-busy', 'true');
+    body.replaceChildren(...Array.from({ length: count }, () => {
+      const row = node('tr', undefined, 'skeleton-row'); row.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < columns; i++) { const cell = node('td'); cell.dataset.label = labels[i] || ''; cell.append(skeletonLine([58, 76, 64, 84, 52, 70][i % 6] + '%')); row.append(cell); }
+      return row;
+    }));
+  }
+  function showInitialSkeleton() {
+    initialLoading = true;
+    if (current === 'alarms') { skeletonRows('alarm-rows', 4); return; }
+    if (current === 'dashboards') { skeletonRows('dashboard-rows', 6); return; }
+    if (current !== 'home') return;
+    const summary = $('summary'); summary.setAttribute('aria-busy', 'true');
+    summary.replaceChildren(...Array.from({ length: 4 }, () => { const card = node('article', undefined, 'skeleton-card'); card.setAttribute('aria-hidden', 'true'); card.append(skeletonLine('48%'), skeletonLine('28%'), skeletonLine('66%')); return card; }));
+    skeletonRows('home-rows', 6, 3);
+    const activity = $('home-activity-list'); activity.setAttribute('aria-busy', 'true');
+    activity.replaceChildren(...Array.from({ length: 2 }, () => { const row = node('div', undefined, 'skeleton-activity'); row.setAttribute('aria-hidden', 'true'); row.append(skeletonLine('42%'), skeletonLine('72%')); return row; }));
+  }
+  function finishInitialSkeleton(clear = false) {
+    if (!initialLoading) return;
+    if (clear) document.querySelectorAll('.skeleton-row, .skeleton-card, .skeleton-activity').forEach(el => el.remove());
+    document.querySelectorAll('[aria-busy="true"]').forEach(el => el.setAttribute('aria-busy', 'false'));
+    initialLoading = false;
+  }
   const date = ts => new Date(ts).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour12: false });
   const metrics = { waterTemperature: 'อุณหภูมิน้ำ', acLineVoltage: 'แรงดันไฟฟ้า AC', compressorCurrent: 'กระแสไฟคอมเพรสเซอร์', compressorPower: 'กำลังไฟคอมเพรสเซอร์' };
   const severity = a => a.severity || (a.rule === 'tank' ? 'info' : 'critical');
@@ -53,14 +79,18 @@
   }
   function dashboardTable(machines, target = 'dashboard-rows') {
     $('dashboard-summary').textContent = `ทั้งหมด ${machines.length} อุปกรณ์ · กำลังรับข้อมูล ${machines.filter(m => m.online).length} อุปกรณ์`;
+    const body = $(target), labels = [...body.closest('table').querySelectorAll('thead th')].map(th => th.textContent.trim());
+    body.setAttribute('aria-busy', 'false');
     $(target).replaceChildren(...machines.map(machine => {
       const row = node('tr'), name = node('td'), link = node('a', machine.name, 'machine-name-link');
       const href = '/dashboard?machine=' + encodeURIComponent(machine.id); link.href = href; name.append(link);
       const status = node('td'); status.append(node('span', machine.online ? 'กำลังรับข้อมูล' : 'ออฟไลน์ / รอข้อมูล', 'badge' + (machine.online ? ' online' : '')));
       const action = node('td'), open = node('a', 'เปิดแดชบอร์ด →', 'table-dashboard-link'); open.href = href; open.setAttribute('aria-label', 'เปิดแดชบอร์ด ' + machine.name); action.append(open);
-      row.append(name, node('td', machine.location || '—'), node('td', machine.connection === 'usb' ? 'USB' : 'Wi-Fi / MQTT'), status, node('td', machine.lastSeen ? date(machine.lastSeen) : 'ยังไม่ได้รับข้อมูล', 'date-cell'), action); return row;
+      row.append(name, node('td', machine.location || '—'), node('td', machine.connection === 'usb' ? 'USB' : 'Wi-Fi / MQTT'), status, node('td', machine.lastSeen ? date(machine.lastSeen) : 'ยังไม่ได้รับข้อมูล', 'date-cell'), action);
+      row.querySelectorAll('td').forEach((cell, index) => { cell.dataset.label = labels[index] || ''; });
+      return row;
     }));
-    if (!machines.length) { const row = node('tr'), cell = node('td', 'ยังไม่มีอุปกรณ์ เพิ่มเครื่องที่หน้าอุปกรณ์เพื่อเริ่มใช้งาน', 'workspace-empty'); cell.colSpan = 6; row.append(cell); $(target).append(row); }
+    if (!machines.length) { const row = node('tr', undefined, 'empty-row'), cell = node('td', 'ยังไม่มีอุปกรณ์ เพิ่มเครื่องที่หน้าอุปกรณ์เพื่อเริ่มใช้งาน', 'workspace-empty'); cell.colSpan = 6; row.append(cell); $(target).append(row); }
   }
   function renderAlarms() {
     if (detailId) renderDetail();
@@ -71,14 +101,18 @@
     pageCount.textContent = `${filtered.length ? start + 1 : 0}–${Math.min(start + alarmPageSize, filtered.length)} จาก ${filtered.length}`;
     buttons[0].disabled = buttons[1].disabled = alarmPage === 0; buttons[2].disabled = buttons[3].disabled = alarmPage === lastPage;
     buttons[0].onclick = () => { alarmPage = 0; renderAlarms(); }; buttons[1].onclick = () => { alarmPage--; renderAlarms(); }; buttons[2].onclick = () => { alarmPage++; renderAlarms(); }; buttons[3].onclick = () => { alarmPage = lastPage; renderAlarms(); };
+    $('alarm-rows').setAttribute('aria-busy', 'false');
     $('alarm-rows').replaceChildren(...filtered.slice(start, start + alarmPageSize).map(a => {
       const row = node('tr'), level = node('td'), message = node('td'), link = node('a', a.message, 'alarm-detail-link'); link.href = '/alarms?event=' + encodeURIComponent(a.id); message.append(link); level.append(node('span', severity(a) === 'critical' ? '● วิกฤต' : 'ข้อมูลทั่วไป', 'severity-badge severity-' + severity(a)));
       link.onclick = event => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); detailId = a.id; history.replaceState(null, '', link.href); renderDetail(); };
       if (a.metric) message.append(node('small', 'ค่าล่าสุดที่ตรวจพบ ' + a.currentValue + ' · เกณฑ์ ' + a.comparison + ' ' + a.limit + ' · ยืนยัน ' + a.holdSeconds + ' วินาที', 'alarm-reading'));
       row.classList.toggle('critical-alarm', severity(a) === 'critical' && !a.resolvedAt);
-      row.append(node('td', date(a.createdAt)), node('td', a.machineName), level, message); return row;
+      row.append(node('td', date(a.createdAt)), node('td', a.machineName), level, message);
+      const labels = [...$('alarm-rows').closest('table').querySelectorAll('thead th')].map(th => th.textContent.trim());
+      row.querySelectorAll('td').forEach((cell, index) => { cell.dataset.label = labels[index] || ''; });
+      return row;
     }));
-    if (!filtered.length) { const row = node('tr'), cell = node('td', 'ไม่มีเหตุการณ์ในรายการนี้', 'workspace-empty'); cell.colSpan = 4; row.append(cell); $('alarm-rows').append(row); }
+    if (!filtered.length) { const row = node('tr', undefined, 'empty-row'), cell = node('td', 'ไม่มีเหตุการณ์ในรายการนี้', 'workspace-empty'); cell.colSpan = 4; row.append(cell); $('alarm-rows').append(row); }
   }
   function renderDetail() {
     detailPanel.replaceChildren();
@@ -97,6 +131,28 @@
     detailPanel.append(node('p', 'รายละเอียดอัปเดตทุก 5 วินาที ค่าล่าสุดที่ตรวจพบอาจเป็นข้อมูลก่อนการเชื่อมต่อขาดหาย ไม่ใช่การยืนยันค่าปัจจุบัน', 'help'));
     const dashboard = node('a', 'เปิดแดชบอร์ดอุปกรณ์ →', 'button-link'); dashboard.href = '/dashboard?machine=' + encodeURIComponent(a.machineId); detailPanel.append(dashboard);
   }
+  function renderHomeActivity(active) {
+    const list = $('home-activity-list');
+    if (!list) return;
+    $('home-activity-title').textContent = '\u0e40\u0e2b\u0e15\u0e38\u0e01\u0e32\u0e23\u0e13\u0e4c\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14';
+    $('home-activity-summary').textContent = active.length ? '\u0e21\u0e35 ' + active.length + ' \u0e40\u0e2b\u0e15\u0e38\u0e01\u0e32\u0e23\u0e13\u0e4c\u0e17\u0e35\u0e48\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e41\u0e01\u0e49\u0e44\u0e02' : '\u0e2a\u0e23\u0e38\u0e1b\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e02\u0e2d\u0e07\u0e40\u0e2b\u0e15\u0e38\u0e01\u0e32\u0e23\u0e13\u0e1b\u0e31\u0e08\u0e08\u0e38\u0e1a\u0e31\u0e19';
+    list.replaceChildren();
+    if (!active.length) {
+      const empty = node('div', undefined, 'home-activity-empty');
+      empty.append(node('span', '\u2713', 'home-activity-check'), node('strong', '\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e2b\u0e15\u0e38\u0e01\u0e32\u0e23\u0e13\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23'), node('p', '\u0e23\u0e30\u0e1a\u0e1a\u0e01\u0e25\u0e31\u0e1a\u0e21\u0e32\u0e41\u0e2a\u0e14\u0e07\u0e17\u0e35\u0e48\u0e19\u0e35\u0e48\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e1e\u0e1a\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e1c\u0e34\u0e14\u0e1b\u0e01\u0e15\u0e34'));
+      list.append(empty);
+      return;
+    }
+    for (const alarm of active.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 4)) {
+      const row = node('article', undefined, 'home-activity-item');
+      const detail = node('div'); detail.append(node('strong', alarm.machineName || alarm.machineId || '\u0e2d\u0e38\u0e1b\u0e01\u0e23\u0e13\u0e4c'), node('p', alarm.message || alarm.rule || ''));
+      const meta = node('div', undefined, 'home-activity-meta');
+      const level = severity(alarm);
+      meta.append(node('span', level === 'critical' ? '\u0e27\u0e34\u0e01\u0e24\u0e15' : '\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25', 'severity-badge severity-' + level), node('time', date(alarm.createdAt)));
+      const link = node('a', '\u0e14\u0e39\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14', 'home-activity-open'); link.href = '/alarms?event=' + encodeURIComponent(alarm.id);
+      row.append(detail, meta, link); list.append(row);
+    }
+  }
   function fillSettings(s) {
     $('line-enabled').checked = s.enabled; $('line-recipient').value = s.recipient; $('line-token').value = ''; $('clear-token').checked = false;
     $('token-help').textContent = s.hasToken ? 'บันทึกโทเคนไว้แล้ว เว้นว่างเพื่อใช้โทเคนเดิม' : 'ยังไม่ได้ตั้งค่าโทเคน';
@@ -108,12 +164,13 @@
   async function refresh() {
     if (refreshing) return; refreshing = true;
     try {
-      if (current === 'notifications') { if (!dirty) fillSettings(await api('/api/notifications')); return; }
-      if (current === 'alarms') { alarms = await api('/api/alarms'); renderAlarms(); return; }
+      if (current === 'notifications') { if (!dirty) fillSettings(await api('/api/notifications')); finishInitialSkeleton(); return; }
+      if (current === 'alarms') { alarms = await api('/api/alarms'); renderAlarms(); finishInitialSkeleton(); return; }
       const machines = await api('/api/machines');
       if (current === 'dashboards') dashboardTable(machines);
-      else { alarms = await api('/api/alarms'); const active = alarms.filter(a => !a.resolvedAt); $('summary').replaceChildren(...[['อุปกรณ์ทั้งหมด', machines.length], ['กำลังรับข้อมูล', machines.filter(m => m.online).length], ['ออฟไลน์ / รอข้อมูล', machines.filter(m => !m.online).length], ['เหตุการณ์ที่กำลังเกิดขึ้น', active.length]].map(([label, count]) => { const a = node('article'); a.append(node('span', label), node('strong', String(count))); return a; })); dashboardTable(machines, 'home-rows'); }
-    } catch (e) { notice(e.message); } finally { refreshing = false; }
+      else { alarms = await api('/api/alarms'); const active = alarms.filter(a => !a.resolvedAt); $('summary').replaceChildren(...[['อุปกรณ์ทั้งหมด', machines.length], ['กำลังรับข้อมูล', machines.filter(m => m.online).length], ['ออฟไลน์ / รอข้อมูล', machines.filter(m => !m.online).length], ['เหตุการณ์ที่กำลังเกิดขึ้น', active.length]].map(([label, count]) => { const a = node('article'); a.append(node('span', label), node('strong', String(count))); return a; })); dashboardTable(machines, 'home-rows'); renderHomeActivity(active); }
+      finishInitialSkeleton();
+    } catch (e) { finishInitialSkeleton(true); notice(e.message); } finally { refreshing = false; }
   }
   $('reload').onclick = refresh; $('alarm-filter').onchange = severityFilter.onchange = () => { alarmPage = 0; renderAlarms(); }; pageSize.onchange = () => { alarmPageSize = Number(pageSize.value); alarmPage = 0; renderAlarms(); };
   $('logout').onclick = async () => { try { await api('/api/auth/logout', {}); location.assign('/login'); } catch (e) { notice(e.message); } };
@@ -128,5 +185,5 @@
     catch (e) { notice(e.message); } finally { $('save-line').disabled = $('test-line').disabled = false; }
   };
   $('test-line').onclick = async () => { if (dirty) return notice('กรุณาบันทึกการตั้งค่าก่อนส่งข้อความทดสอบ'); $('test-line').disabled = $('save-line').disabled = true; try { await api('/api/notifications/test', {}); notice('LINE รับคำขอส่งข้อความทดสอบแล้ว กรุณาตรวจสอบที่ผู้รับ'); } catch (e) { notice(e.message); } finally { $('test-line').disabled = $('save-line').disabled = false; } };
-  (async () => { try { const session = await api('/api/auth/session'); if (!session.authenticated) return location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search)); $('logout').hidden = !session.enabled; await refresh(); if (current !== 'notifications') setInterval(refresh, 5000); } catch (e) { notice(e.message); } })();
+  (async () => { try { const session = await api('/api/auth/session'); if (!session.authenticated) return location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search)); $('logout').hidden = !session.enabled; showInitialSkeleton(); await refresh(); if (current !== 'notifications') setInterval(refresh, 5000); } catch (e) { finishInitialSkeleton(true); notice(e.message); } })();
 })();

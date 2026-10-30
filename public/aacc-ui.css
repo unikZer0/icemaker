@@ -473,6 +473,88 @@ input:focus-visible {
   }
 }
 
+/* Improve reading comfort on narrow screens. */
+@media (max-width: 600px) {
+  body {
+    --muted: #596d6b;
+  }
+
+  main p,
+  .fleet-summary,
+  .panel-heading p,
+  .field-label small,
+  .help {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .machine-card .card-method,
+  .machine-card dt,
+  .machine-card dd,
+  .home-machine-panel dt,
+  .home-machine-panel dd {
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .notification-layout .check-label,
+  .notification-layout .field-label,
+  .notification-layout legend {
+    font-size: 14px;
+  }
+
+  .notification-layout fieldset {
+    padding: 10px 14px;
+  }
+
+  #alarms-view .alarm-toolbar {
+    gap: 12px;
+  }
+
+  #alarms-view .alarm-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  #alarms-view .alarm-filters label:first-child {
+    gap: 6px;
+  }
+
+  #alarms-view .alarm-filters label,
+  #alarms-view .alarm-filters label > span {
+    font-size: 13px;
+  }
+
+  #alarms-view .alarm-filters select,
+  #alarms-view #alarm-search {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  #alarms-view .alarm-stat span,
+  #alarms-view .alarm-time,
+  #alarms-view .alarm-source small,
+  #alarms-view .fleet-table tbody td,
+  #alarms-view .workspace-empty span,
+  #alarms-view .workspace-empty .alarm-empty-link,
+  #alarms-view .fleet-pagination > span {
+    color: #596d6b;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  #alarms-view .severity-badge,
+  #alarms-view .alarm-state,
+  #alarms-view .alarm-action {
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 1200px) {
   .notification-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -1130,7 +1212,8 @@ input:focus-visible {
     flex-direction: column;
   }
 
-  .workspace-page > main > header {
+  .workspace-page > main > header,
+  #overview > header {
     margin-inline: calc(-1 * var(--main-gutter));
     padding-inline: var(--main-gutter);
   }
@@ -1593,5 +1676,27 @@ header {
     background: #f5f7f7;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+}
+
+@media (max-width: 600px) {
+  #alarms-view .alarm-toolbar .alarm-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #home-view .home-machine-panel .fleet-table tbody td,
+  .machines-page .fleet-table tbody td {
+    color: #596d6b;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  #home-view .home-machine-panel .fleet-table tbody td::before {
+    color: #596d6b;
+    font-size: 13px;
+  }
+
+  #alarms-view .alarm-stat span {
+    font-size: 13px;
   }
 }

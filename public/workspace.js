@@ -5,7 +5,7 @@
   const pages = { home: ['หน้าแรก', 'ภาพรวมอุปกรณ์และเหตุการณ์ที่ต้องตรวจสอบ'], alarms: [detailId ? 'รายละเอียดเหตุการณ์' : 'แจ้งเตือน', 'ตรวจสอบเหตุการณ์วิกฤตและข้อมูลจากอุปกรณ์'], dashboards: ['แดชบอร์ด', 'เลือกเครื่องเพื่อดูค่าปัจจุบันและประวัติการวัด'], notifications: ['ศูนย์การแจ้งเตือน', 'กำหนดผู้รับและเหตุการณ์สำหรับการแจ้งเตือนผ่าน LINE'] };
   const [title, description] = pages[current] || pages.home;
   document.title = 'AACC IceMaker · ' + title; $('breadcrumb').textContent = $('page-title').textContent = title; $('page-description').textContent = description; $(current + '-view').hidden = false;
-  let alarms = [], refreshing = false, dirty = false, alarmPage = 0, alarmPageSize = 10, initialLoading = false;
+  let alarms = [], alarmMachines = [], refreshing = false, dirty = false, alarmPage = 0, alarmPageSize = 10, initialLoading = false;
   const node = (tag, text, cls) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (cls) el.className = cls; return el; };
   const notice = text => { $('notice').hidden = !text; $('notice').textContent = text; };
   const skeletonLine = width => { const line = node('span', undefined, 'skeleton-line'); line.style.width = width; line.setAttribute('aria-hidden', 'true'); return line; };
@@ -19,7 +19,7 @@
   }
   function showInitialSkeleton() {
     initialLoading = true;
-    if (current === 'alarms') { skeletonRows('alarm-rows', 4); return; }
+    if (current === 'alarms') { skeletonRows('alarm-rows', 6); return; }
     if (current === 'dashboards') { skeletonRows('dashboard-rows', 6); return; }
     if (current !== 'home') return;
     const summary = $('summary'); summary.setAttribute('aria-busy', 'true');
@@ -37,11 +37,18 @@
   const date = ts => new Date(ts).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour12: false });
   const metrics = { waterTemperature: 'อุณหภูมิน้ำ', acLineVoltage: 'แรงดันไฟฟ้า AC', compressorCurrent: 'กระแสไฟคอมเพรสเซอร์', compressorPower: 'กำลังไฟคอมเพรสเซอร์' };
   const severity = a => a.severity || (a.rule === 'tank' ? 'info' : 'critical');
+  const ruleLabel = a => ({ offline: 'การเชื่อมต่อ', sensor: 'เซนเซอร์', tank: 'ระดับถัง', waterTemperature: 'อุณหภูมิน้ำ', acLineVoltage: 'แรงดันไฟฟ้า AC', compressorCurrent: 'กระแสคอมเพรสเซอร์', compressorPower: 'กำลังไฟคอมเพรสเซอร์' }[a.rule] || a.rule || 'ระบบ');
+  const alarmSummary = node('div', undefined, 'alarm-summary'); alarmSummary.id = 'alarm-summary'; alarmSummary.setAttribute('aria-label', 'สรุปเหตุการณ์'); alarmSummary.setAttribute('aria-live', 'polite');
+  $('alarms-view').insertBefore(alarmSummary, $('alarms-view').firstElementChild);
   const severityLabel = node('label', 'ระดับ '), severityFilter = node('select'); severityFilter.id = 'severity-filter';
   for (const [value, text] of [['critical', 'วิกฤต'], ['all', 'ทุกระดับ'], ['info', 'ข้อมูลทั่วไป']]) { const option = node('option', text); option.value = value; severityFilter.append(option); }
-  severityLabel.append(severityFilter); $('alarms-view').querySelector('.panel-heading').append(severityLabel);
-  const headingRow = $('alarms-view').querySelector('thead tr'); headingRow.insertBefore(node('th', 'ระดับ'), headingRow.children[2]);
-  while (headingRow.children.length > 4) headingRow.lastElementChild.remove();
+  severityFilter.value = 'all'; severityFilter.setAttribute('aria-label', 'กรองตามระดับเหตุการณ์'); severityLabel.append(severityFilter);
+  const searchLabel = node('label', undefined, 'alarm-search-label'), alarmIcon = node('span', undefined, 'alarm-search-icon'), alarmSearch = node('input'); alarmSearch.type = 'search'; alarmSearch.id = 'alarm-search'; alarmSearch.placeholder = 'ค้นหาอุปกรณ์หรือเหตุการณ์'; alarmSearch.setAttribute('aria-label', 'ค้นหาอุปกรณ์หรือเหตุการณ์'); alarmIcon.setAttribute('aria-hidden', 'true'); searchLabel.append(alarmIcon, alarmSearch);
+  const alarmPanel = $('alarms-view').querySelector('.panel'), panelHeading = alarmPanel.querySelector('.panel-heading');
+  const alarmToolbar = node('div', undefined, 'alarm-toolbar'), alarmFilters = node('div', undefined, 'alarm-filters');
+  alarmFilters.append(severityLabel, searchLabel); alarmToolbar.append(alarmFilters); panelHeading.after(alarmToolbar);
+  const headingRow = $('alarms-view').querySelector('thead tr');
+  headingRow.replaceChildren(...['รายละเอียดเหตุการณ์', 'อุปกรณ์ / แหล่งที่มา', 'เวลา (กรุงเทพฯ)', 'ระดับ', 'สถานะ', 'จัดการ'].map(label => node('th', label)));
   const listPanel = $('alarms-view').querySelector('.panel');
   const pagination = node('div', undefined, 'fleet-pagination'), pageSizeLabel = node('label', 'รายการต่อหน้า: '), pageSize = node('select'), pageCount = node('span'); pageCount.setAttribute('aria-live', 'polite');
   for (const size of [5, 10, 25, 50]) { const option = node('option', String(size)); option.value = size; pageSize.append(option); } pageSize.value = String(alarmPageSize); pageSizeLabel.append(pageSize);
@@ -94,8 +101,18 @@
   }
   function renderAlarms() {
     if (detailId) renderDetail();
-    $('alarms-view').querySelector('.panel-heading p').textContent = 'วิกฤตที่กำลังเกิดขึ้น ' + alarms.filter(a => !a.resolvedAt && severity(a) === 'critical').length + ' รายการ · ตรวจสอบทุก 5 วินาที · ดูถังเต็มได้ที่ระดับข้อมูลทั่วไป';
-    const filtered = alarms.filter(a => ($('alarm-filter').value === 'all' || ($('alarm-filter').value === 'active' ? !a.resolvedAt : a.resolvedAt)) && (severityFilter.value === 'all' || severity(a) === severityFilter.value)).sort((a, b) => (severity(a) === 'critical' ? 0 : 1) - (severity(b) === 'critical' ? 0 : 1) || b.createdAt - a.createdAt);
+    const active = alarms.filter(a => !a.resolvedAt), critical = active.filter(a => severity(a) === 'critical').length, info = active.length - critical, resolved = alarms.length - active.length;
+    alarmSummary.replaceChildren(...[
+      ['เหตุการณ์ทั้งหมด', alarms.length, 'active'],
+      ['วิกฤต', critical, 'critical'],
+      ['ข้อมูลทั่วไป', info, 'info'],
+      ['สิ้นสุดแล้ว', resolved, 'resolved']
+    ].map(([label, count, tone]) => { const card = node('article', undefined, 'alarm-stat alarm-stat-' + tone); card.append(node('span', label), node('strong', String(count))); return card; }));
+    const noDataDevices = alarmMachines.filter(m => !m.online && !m.lastSeen).length, offlineDevices = alarmMachines.filter(m => !m.online && m.lastSeen).length;
+    const deviceHint = noDataDevices ? `ยังไม่เคยได้รับข้อมูลจาก ${noDataDevices} เครื่อง` : offlineDevices ? `${offlineDevices} เครื่องขาดการเชื่อมต่อ` : '';
+    $('alarms-view').querySelector('.panel-heading p').textContent = `${alarms.length} เหตุการณ์${deviceHint ? ' · ' + deviceHint : ''} · รายการที่กำลังเกิดแสดงก่อน · อัปเดตทุก 5 วินาที`;
+    const query = alarmSearch.value.trim().toLocaleLowerCase('th-TH');
+    const filtered = alarms.filter(a => (severityFilter.value === 'all' || severity(a) === severityFilter.value) && (!query || `${a.machineName || ''} ${a.message || ''} ${a.rule || ''}`.toLocaleLowerCase('th-TH').includes(query))).sort((a, b) => Number(Boolean(a.resolvedAt)) - Number(Boolean(b.resolvedAt)) || (!a.resolvedAt ? (severity(a) === 'critical' ? 0 : 1) - (severity(b) === 'critical' ? 0 : 1) : 0) || b.createdAt - a.createdAt);
     const lastPage = Math.max(0, Math.ceil(filtered.length / alarmPageSize) - 1); alarmPage = Math.min(alarmPage, lastPage);
     const start = alarmPage * alarmPageSize;
     pageCount.textContent = `${filtered.length ? start + 1 : 0}–${Math.min(start + alarmPageSize, filtered.length)} จาก ${filtered.length}`;
@@ -103,16 +120,26 @@
     buttons[0].onclick = () => { alarmPage = 0; renderAlarms(); }; buttons[1].onclick = () => { alarmPage--; renderAlarms(); }; buttons[2].onclick = () => { alarmPage++; renderAlarms(); }; buttons[3].onclick = () => { alarmPage = lastPage; renderAlarms(); };
     $('alarm-rows').setAttribute('aria-busy', 'false');
     $('alarm-rows').replaceChildren(...filtered.slice(start, start + alarmPageSize).map(a => {
-      const row = node('tr'), level = node('td'), message = node('td'), link = node('a', a.message, 'alarm-detail-link'); link.href = '/alarms?event=' + encodeURIComponent(a.id); message.append(link); level.append(node('span', severity(a) === 'critical' ? '● วิกฤต' : 'ข้อมูลทั่วไป', 'severity-badge severity-' + severity(a)));
+      const row = node('tr'), detail = node('td'), link = node('a', a.message || 'เหตุการณ์จากอุปกรณ์', 'alarm-detail-link'); link.href = '/alarms?event=' + encodeURIComponent(a.id); detail.append(link);
       link.onclick = event => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); detailId = a.id; history.replaceState(null, '', link.href); renderDetail(); };
-      if (a.metric) message.append(node('small', 'ค่าล่าสุดที่ตรวจพบ ' + a.currentValue + ' · เกณฑ์ ' + a.comparison + ' ' + a.limit + ' · ยืนยัน ' + a.holdSeconds + ' วินาที', 'alarm-reading'));
+      if (a.metric) detail.append(node('small', 'ค่าล่าสุด ' + a.currentValue + ' · เกณฑ์ ' + a.comparison + ' ' + a.limit, 'alarm-reading'));
       row.classList.toggle('critical-alarm', severity(a) === 'critical' && !a.resolvedAt);
-      row.append(node('td', date(a.createdAt)), node('td', a.machineName), level, message);
+      const source = node('td', undefined, 'alarm-source'); source.append(node('strong', a.machineName || '—'), node('small', ruleLabel(a)));
+      const level = node('td'), status = node('td'), action = node('td');
+      level.append(node('span', severity(a) === 'critical' ? '● วิกฤต' : '● ทั่วไป', 'severity-badge severity-' + severity(a)));
+      status.append(node('span', a.resolvedAt ? 'สิ้นสุดแล้ว' : 'กำลังเกิดขึ้น', 'alarm-state' + (a.resolvedAt ? ' alarm-state-resolved' : ' alarm-state-active')));
+      const open = node('button', 'ดูรายละเอียด', 'alarm-action'); open.type = 'button'; open.onclick = () => { detailId = a.id; history.replaceState(null, '', '/alarms?event=' + encodeURIComponent(a.id)); renderDetail(); }; action.append(open);
+      row.append(detail, source, node('td', date(a.createdAt), 'alarm-time'), level, status, action);
       const labels = [...$('alarm-rows').closest('table').querySelectorAll('thead th')].map(th => th.textContent.trim());
       row.querySelectorAll('td').forEach((cell, index) => { cell.dataset.label = labels[index] || ''; });
       return row;
     }));
-    if (!filtered.length) { const row = node('tr', undefined, 'empty-row'), cell = node('td', 'ไม่มีเหตุการณ์ในรายการนี้', 'workspace-empty'); cell.colSpan = 4; row.append(cell); $('alarm-rows').append(row); }
+    if (!filtered.length) {
+      const row = node('tr', undefined, 'empty-row'), cell = node('td', undefined, 'workspace-empty'); cell.colSpan = 6;
+      cell.append(node('strong', alarms.length ? 'ไม่พบเหตุการณ์ที่ตรงกับตัวกรอง' : 'ยังไม่มีเหตุการณ์'), node('span', alarms.length ? 'ลองเปลี่ยนระดับหรือคำค้นหา' : deviceHint || 'เมื่ออุปกรณ์รายงานเหตุการณ์ รายการจะแสดงตรงนี้'));
+      if (!alarms.length && (noDataDevices || offlineDevices)) { const link = node('a', 'ตรวจสอบอุปกรณ์ →', 'alarm-empty-link'); link.href = '/devices'; cell.append(link); }
+      row.append(cell); $('alarm-rows').append(row);
+    }
   }
   function renderDetail() {
     detailPanel.replaceChildren();
@@ -165,14 +192,14 @@
     if (refreshing) return; refreshing = true;
     try {
       if (current === 'notifications') { if (!dirty) fillSettings(await api('/api/notifications')); finishInitialSkeleton(); return; }
-      if (current === 'alarms') { alarms = await api('/api/alarms'); renderAlarms(); finishInitialSkeleton(); return; }
+      if (current === 'alarms') { [alarms, alarmMachines] = await Promise.all([api('/api/alarms'), api('/api/machines')]); renderAlarms(); finishInitialSkeleton(); return; }
       const machines = await api('/api/machines');
       if (current === 'dashboards') dashboardTable(machines);
       else { alarms = await api('/api/alarms'); const active = alarms.filter(a => !a.resolvedAt); $('summary').replaceChildren(...[['อุปกรณ์ทั้งหมด', machines.length], ['กำลังรับข้อมูล', machines.filter(m => m.online).length], ['ออฟไลน์ / รอข้อมูล', machines.filter(m => !m.online).length], ['เหตุการณ์ที่กำลังเกิดขึ้น', active.length]].map(([label, count]) => { const a = node('article'); a.append(node('span', label), node('strong', String(count))); return a; })); dashboardTable(machines, 'home-rows'); renderHomeActivity(active); }
       finishInitialSkeleton();
     } catch (e) { finishInitialSkeleton(true); notice(e.message); } finally { refreshing = false; }
   }
-  $('reload').onclick = refresh; $('alarm-filter').onchange = severityFilter.onchange = () => { alarmPage = 0; renderAlarms(); }; pageSize.onchange = () => { alarmPageSize = Number(pageSize.value); alarmPage = 0; renderAlarms(); };
+  $('reload').onclick = refresh; severityFilter.onchange = alarmSearch.oninput = () => { alarmPage = 0; renderAlarms(); }; pageSize.onchange = () => { alarmPageSize = Number(pageSize.value); alarmPage = 0; renderAlarms(); };
   $('logout').onclick = async () => { try { await api('/api/auth/logout', {}); location.assign('/login'); } catch (e) { notice(e.message); } };
   $('line-form').oninput = () => { dirty = true; };
   $('line-form').onsubmit = async event => {

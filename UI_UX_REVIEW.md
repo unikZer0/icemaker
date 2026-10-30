@@ -88,3 +88,18 @@ The local Docker daemon was unavailable during this pass, so browser review used
 - Final readiness rerun: JavaScript/static checks and `git diff --check` pass; direct execution of all test files has no failures (two PostgreSQL cases skip unless enabled, and both pass in the explicit PostgreSQL run above). Mobile smoke check confirms 5 visible menu links, one-column layout, device sort availability, and zero browser errors.
 - Both Compose services are healthy and `/api/health` returns `200`; the app container has no error/warning log matches. PostgreSQL logs include the deliberately-triggered missing-device FK rejection from the rollback test and a `role "root" does not exist` entry caused by an earlier manual `pg_isready` call without a DB username. Rechecking readiness with the configured database user succeeds.
 - No changes are staged. The untracked `env` file contains secret configuration keys and is now ignored by `.gitignore`.
+
+
+## 2026-10-30 UI review follow-up
+
+- Removed the cross-document @view-transition opt-in, keeping local menu, dialog, and control transitions; this aligns the stylesheet with the earlier Chromium error review.
+- Simplified /alarms to one combined event list, active items first. The empty state and page subtitle now call out devices with no data or offline status and link to Devices. Removed the unused status selector and tab CSS.
+- Bumped stylesheet and script cache keys. Docker Compose rebuild completed and /api/health returned HTTP 200 with PostgreSQL storage.
+- Browser visual review of these latest 2026-10-30 changes remains outstanding; the recorded Chrome pass predates them.
+
+## 2026-10-30 mobile readability follow-up
+
+- Increased mobile supporting-text size and contrast on Home, Alarms, Devices, and Notifications, including device summary rows and alarm details.
+- Stacked the Alarms severity filter and search input vertically on narrow screens and increased their tap height.
+- Rebuilt the `icemaker` service to serve the updated stylesheet.
+- Rechecked the four pages in Chromium at 320px and 390px: no horizontal overflow and no browser errors; Alarms controls render one per row.

@@ -92,6 +92,8 @@
 #alarms-view .alarm-source strong,#alarms-view .alarm-source small{display:block}
 #alarms-view .alarm-source strong{font-weight:650;color:#34484b}
 #alarms-view .alarm-source small{margin-top:3px;color:var(--muted);font-size:11px}
+#alarms-view .alarm-source .alarm-location{color:#596d6b}
+#alarms-view .alarm-source .alarm-kind{color:#34484b}
 #alarms-view .alarm-action{padding:7px 11px;border-color:rgba(91,103,107,.15);border-radius:10px;background:rgba(255,255,255,.66);font-size:11px;white-space:nowrap}
 #alarms-view .alarm-action:hover{border-color:rgba(8,127,105,.35);background:rgba(255,255,255,.95)}
 #alarms-view .fleet-pagination{border-top:1px solid rgba(91,103,107,.1)}
@@ -116,4 +118,73 @@
 @media(max-width:420px){
   #alarms-view .alarm-filters{grid-template-columns:minmax(95px,.75fr) minmax(0,1.25fr)}
   #alarms-view .alarm-action{padding:6px 9px}
+}
+
+/* Notification center: a compact, guided setup flow with clear active states. */
+#notifications-view .notification-layout{grid-template-columns:minmax(0,1.55fr) minmax(300px,.8fr);gap:22px}
+#notifications-view .notification-layout>.panel{border-radius:22px;padding:26px}
+#notifications-view .notification-layout>section:first-child>h2{font-size:21px;margin:0 0 6px}
+#notifications-view .notification-layout>section:first-child>p{max-width:68ch}
+#notifications-view .notification-master-card{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:22px 0 24px;padding:16px 18px;border:1px solid rgba(8,127,105,.2);border-radius:16px;background:linear-gradient(120deg,rgba(8,127,105,.07),rgba(255,255,255,.72))}
+#notifications-view .notification-master-toggle{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:center;gap:2px 12px;margin:0;color:#263c3a;cursor:pointer}
+#notifications-view .notification-master-toggle input{grid-row:1 / span 2;width:18px;height:18px;margin:0;accent-color:#087f69}
+#notifications-view .notification-master-toggle strong{font-size:15px;line-height:1.5}
+#notifications-view .notification-master-toggle small{grid-column:2;color:#596d6b;font-size:13px;line-height:1.55}
+#notifications-view .notification-status{flex:none;padding:6px 11px;border:1px solid rgba(91,103,107,.15);border-radius:999px;background:rgba(255,255,255,.72);color:#596d6b;font-size:12px;font-weight:600}
+#notifications-view .notification-status.is-enabled{border-color:rgba(8,127,105,.2);background:#e8f5ef;color:#08705e}
+#notifications-view .notification-section-title{margin:0 0 8px;font-size:16px}
+#notifications-view .notification-credentials{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px;align-items:start}
+#notifications-view .notification-credentials .field-label{min-width:0;margin:12px 0 16px}
+#notifications-view .notification-credentials .field-label input{min-width:0;min-height:46px;border-radius:12px}
+#notifications-view .notification-credentials .check-label{grid-column:1 / -1;margin:0 0 8px;color:#596d6b;font-size:13px}
+#notifications-view .notification-event-rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 24px;padding:18px;border:0;border-radius:16px;background:rgba(239,244,242,.64)}
+#notifications-view .notification-event-rules legend{grid-column:1 / -1;padding:0 6px;font-size:15px;font-weight:650;color:#34484b}
+#notifications-view .notification-option{display:grid;grid-template-columns:18px minmax(0,1fr);align-content:start;align-items:start;gap:3px 10px;min-height:92px;margin:0;padding:14px;border:1px solid rgba(91,103,107,.13);border-radius:14px;background:rgba(255,255,255,.72);cursor:pointer}
+#notifications-view .notification-option input{grid-row:1 / span 2;width:17px;height:17px;margin:2px 0 0;accent-color:#087f69}
+#notifications-view .notification-option-title{color:#34484b;font-size:14px;line-height:1.5}
+#notifications-view .notification-option small{grid-column:2;color:#596d6b;font-size:12px;line-height:1.55}
+#notifications-view .notification-thresholds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 20px;padding:18px;border:0;border-radius:16px;background:rgba(239,244,242,.5)}
+#notifications-view .notification-thresholds>legend,
+#notifications-view .notification-thresholds>.help,
+#notifications-view .notification-thresholds>.check-label{grid-column:1 / -1}
+#notifications-view .notification-thresholds>legend{font-size:15px;font-weight:650;color:#34484b}
+#notifications-view .notification-thresholds>.help{margin:2px 0 4px}
+#notifications-view .threshold-rule{margin:0;padding:13px;border:1px solid rgba(91,103,107,.14);border-radius:14px;background:rgba(255,255,255,.78)}
+#notifications-view .threshold-rule+.threshold-rule{border-top:1px solid rgba(91,103,107,.14)}
+#notifications-view .threshold-rule .check-label{min-height:42px;align-items:flex-start;font-weight:600;color:#34484b}
+#notifications-view .threshold-rule .check-label input{flex:none;margin-top:2px;accent-color:#087f69}
+#notifications-view .threshold-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#notifications-view .threshold-grid .field-label{margin:10px 0 0;font-size:13px}
+#notifications-view .threshold-grid .field-label:last-child{grid-column:1 / -1}
+#notifications-view .threshold-grid input{min-height:42px;border-radius:10px}
+#notifications-view .threshold-rule.threshold-enabled{border-color:rgba(8,127,105,.28);background:#fff}
+#notifications-view #rule-critical{accent-color:#087f69}
+#notifications-view .line-guide{position:sticky;top:24px;align-self:start;border-radius:22px;padding:24px}
+#notifications-view .line-guide ol{padding-left:22px}
+#notifications-view .line-guide li{padding-left:3px}
+#notifications-view #line-form .buttons{position:sticky;z-index:5;top:calc(100dvh - 88px);bottom:auto;margin-top:18px;padding:14px 0 10px;border-top:1px solid rgba(91,103,107,.12);background:#f7f9f8;box-shadow:0 -8px 18px rgba(45,62,59,.06)}
+#notifications-view #line-form .buttons button{min-height:46px;border-radius:12px;padding-inline:18px}
+#notifications-view #line-form>.help{margin:12px 0 0}
+@media(max-width:1100px){#notifications-view .notification-layout{grid-template-columns:minmax(0,1fr)}#notifications-view .line-guide{position:static}}
+@media(max-width:700px){
+  #notifications-view .notification-layout{gap:16px}
+  #notifications-view .notification-layout>.panel{padding:18px;border-radius:18px}
+  #notifications-view .notification-master-card{align-items:flex-start;margin:18px 0;padding:13px;gap:10px}
+  #notifications-view .notification-master-toggle strong{font-size:14px}
+  #notifications-view .notification-master-toggle small{font-size:12px}
+  #notifications-view .notification-status{font-size:11px;padding:5px 8px}
+  #notifications-view .notification-credentials{grid-template-columns:minmax(0,1fr);gap:0}
+  #notifications-view .notification-credentials .field-label{margin:10px 0 14px}
+  #notifications-view .notification-credentials .check-label{grid-column:auto}
+  #notifications-view .notification-event-rules{grid-template-columns:minmax(0,1fr);gap:8px;padding:14px}
+  #notifications-view .notification-option{min-height:0;padding:12px}
+  #notifications-view .notification-thresholds{grid-template-columns:minmax(0,1fr);gap:9px;padding:14px}
+  #notifications-view .notification-thresholds>legend,
+  #notifications-view .notification-thresholds>.help,
+  #notifications-view .notification-thresholds>.check-label{grid-column:1}
+  #notifications-view .threshold-rule{padding:12px}
+  #notifications-view .threshold-grid{grid-template-columns:minmax(0,1fr)}
+  #notifications-view .threshold-grid .field-label:last-child{grid-column:1}
+  #notifications-view #line-form .buttons{margin-inline:-4px;padding-inline:4px;flex-wrap:wrap}
+  #notifications-view #line-form .buttons button{flex:1 1 140px;padding-inline:12px}
 }

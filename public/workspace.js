@@ -48,7 +48,7 @@
   const alarmToolbar = node('div', undefined, 'alarm-toolbar'), alarmFilters = node('div', undefined, 'alarm-filters');
   alarmFilters.append(severityLabel, searchLabel); alarmToolbar.append(alarmFilters); panelHeading.after(alarmToolbar);
   const headingRow = $('alarms-view').querySelector('thead tr');
-  headingRow.replaceChildren(...['รายละเอียดเหตุการณ์', 'อุปกรณ์ / แหล่งที่มา', 'เวลา (กรุงเทพฯ)', 'ระดับ', 'สถานะ', 'จัดการ'].map(label => node('th', label)));
+  headingRow.replaceChildren(...['รายละเอียดเหตุการณ์', 'เครื่อง / สาขา / ประเภท', 'เวลา (กรุงเทพฯ)', 'ระดับ', 'สถานะ', 'จัดการ'].map(label => node('th', label)));
   const listPanel = $('alarms-view').querySelector('.panel');
   const pagination = node('div', undefined, 'fleet-pagination'), pageSizeLabel = node('label', 'รายการต่อหน้า: '), pageSize = node('select'), pageCount = node('span'); pageCount.setAttribute('aria-live', 'polite');
   for (const size of [5, 10, 25, 50]) { const option = node('option', String(size)); option.value = size; pageSize.append(option); } pageSize.value = String(alarmPageSize); pageSizeLabel.append(pageSize);
@@ -62,7 +62,38 @@
   closeDetail.onclick = closePopup;
   detailDialog.addEventListener('cancel', event => { event.preventDefault(); closePopup(); });
   detailDialog.addEventListener('click', event => { if (event.target === detailDialog) { const bounds = detailDialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closePopup(); } });
-  const thresholdsPanel = node('fieldset'); thresholdsPanel.append(node('legend', 'เกณฑ์ค่าวิกฤต · ใช้กับทุกอุปกรณ์'), node('p', 'เปิดเฉพาะค่าที่ทราบหน่วยและช่วงปกติของเครื่องแล้ว เว้นช่องต่ำสุดหรือสูงสุดว่างได้ ระบบจะแจ้งเมื่อค่าผิดเกณฑ์ต่อเนื่องตามเวลายืนยัน อุณหภูมิใช้ได้เมื่อเซนเซอร์รายงานปกติ', 'help'));
+  const masterToggle = $('line-enabled').closest('.check-label');
+  const masterCard = node('section', undefined, 'notification-master-card');
+  const masterLabel = node('label', undefined, 'notification-master-toggle');
+  const masterInput = $('line-enabled');
+  const masterTitle = node('strong', 'เปิดการแจ้งเตือนอัตโนมัติ');
+  masterLabel.append(masterInput, masterTitle, node('small', 'ส่งข้อความเมื่อเกิดเหตุการณ์ตามรายการที่เลือก'));
+  const notificationStatus = node('span', 'กำลังตรวจสอบการตั้งค่า', 'notification-status'); notificationStatus.id = 'notification-status';
+  masterCard.append(masterLabel, notificationStatus); masterToggle.replaceWith(masterCard);
+  const connectionHeading = node('h3', 'ข้อมูลการเชื่อมต่อ LINE', 'notification-section-title'); masterCard.after(connectionHeading);
+  const credentials = node('div', undefined, 'notification-credentials');
+  const tokenField = $('line-token').closest('.field-label'), recipientField = $('line-recipient').closest('.field-label'), clearTokenLabel = $('clear-token').closest('.check-label');
+  const tokenGroup = node('div', undefined, 'notification-token-group'); tokenGroup.append(tokenField, clearTokenLabel);
+  credentials.append(tokenGroup, recipientField); connectionHeading.after(credentials);
+  const thresholdsPanel = node('fieldset', undefined, 'notification-thresholds'); thresholdsPanel.append(node('legend', 'เกณฑ์ค่าวิกฤต · ใช้กับทุกอุปกรณ์'), node('p', 'เปิดเฉพาะค่าที่ทราบหน่วยและช่วงปกติของเครื่องแล้ว เว้นช่องต่ำสุดหรือสูงสุดว่างได้ ระบบจะแจ้งเมื่อค่าผิดเกณฑ์ต่อเนื่องตามเวลายืนยัน เปิดเฉพาะรายการที่ต้องการ แล้วช่องตั้งค่าจะปรากฏ อุณหภูมิใช้ได้เมื่อเซนเซอร์รายงานปกติ', 'help'));
+  const eventRules = $('line-form').querySelector('fieldset'); eventRules.classList.add('notification-event-rules');
+  const eventDescriptions = {
+    'rule-offline': 'เมื่อเครื่องขาดการเชื่อมต่อเกินเวลาที่กำหนด',
+    'rule-sensor': 'เมื่อเซนเซอร์อุณหภูมิไม่พร้อมใช้งาน',
+    'rule-tank': 'เมื่ออุปกรณ์รายงานว่าถังน้ำแข็งเต็ม',
+  };
+  for (const [id, description] of Object.entries(eventDescriptions)) {
+    const label = $(id).closest('.check-label'), text = label.lastChild;
+    label.classList.add('notification-option');
+    if (text?.nodeType === Node.TEXT_NODE) { const title = node('strong', text.textContent.trim(), 'notification-option-title'); text.replaceWith(title); }
+    label.append(node('small', description));
+  }
+  function syncThresholdEditor(toggle) {
+    const row = toggle.closest('.threshold-rule'), grid = row.querySelector('.threshold-grid');
+    grid.hidden = !toggle.checked;
+    row.classList.toggle('threshold-enabled', toggle.checked);
+    grid.querySelectorAll('input').forEach(input => { input.disabled = !toggle.checked; });
+  }
   for (const [key, title] of Object.entries(metrics)) {
     const row = node('div', undefined, 'threshold-rule');
     const toggle = node('input'); toggle.type = 'checkbox'; toggle.id = 'threshold-' + key + '-enabled';
@@ -74,6 +105,8 @@
       field.append(input); grid.append(field);
     }
     row.append(grid); thresholdsPanel.append(row);
+    toggle.addEventListener('change', () => syncThresholdEditor(toggle));
+    syncThresholdEditor(toggle);
   }
   const criticalLabel = node('label', undefined, 'check-label'), criticalInput = node('input'); criticalInput.id = 'rule-critical'; criticalInput.type = 'checkbox'; criticalLabel.append(criticalInput, document.createTextNode('ส่ง LINE เมื่อค่าเกินเกณฑ์วิกฤตที่เปิดไว้'));
   thresholdsPanel.append(criticalLabel); $('line-form').insertBefore(thresholdsPanel, $('line-form').querySelector('.buttons'));
@@ -124,7 +157,10 @@
       link.onclick = event => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); detailId = a.id; history.replaceState(null, '', link.href); renderDetail(); };
       if (a.metric) detail.append(node('small', 'ค่าล่าสุด ' + a.currentValue + ' · เกณฑ์ ' + a.comparison + ' ' + a.limit, 'alarm-reading'));
       row.classList.toggle('critical-alarm', severity(a) === 'critical' && !a.resolvedAt);
-      const source = node('td', undefined, 'alarm-source'); source.append(node('strong', a.machineName || '—'), node('small', ruleLabel(a)));
+      const machine = alarmMachines.find(item => item.id === a.machineId);
+      const branch = machine?.location?.trim() || 'ไม่ระบุสาขา';
+      const source = node('td', undefined, 'alarm-source');
+      source.append(node('strong', machine?.name || a.machineName || '—'), node('small', `สาขา: ${branch}`, 'alarm-location'), node('small', `ประเภท: ${ruleLabel(a)}`, 'alarm-kind'));
       const level = node('td'), status = node('td'), action = node('td');
       level.append(node('span', severity(a) === 'critical' ? '● วิกฤต' : '● ทั่วไป', 'severity-badge severity-' + severity(a)));
       status.append(node('span', a.resolvedAt ? 'สิ้นสุดแล้ว' : 'กำลังเกิดขึ้น', 'alarm-state' + (a.resolvedAt ? ' alarm-state-resolved' : ' alarm-state-active')));
@@ -182,10 +218,12 @@
   }
   function fillSettings(s) {
     $('line-enabled').checked = s.enabled; $('line-recipient').value = s.recipient; $('line-token').value = ''; $('clear-token').checked = false;
+    notificationStatus.textContent = !s.hasToken ? 'ยังไม่ได้เชื่อมต่อ' : s.enabled ? 'เปิดใช้งาน' : 'เชื่อมต่อแล้ว · ปิดการแจ้งเตือน';
+    notificationStatus.classList.toggle('is-enabled', Boolean(s.enabled && s.hasToken));
     $('token-help').textContent = s.hasToken ? 'บันทึกโทเคนไว้แล้ว เว้นว่างเพื่อใช้โทเคนเดิม' : 'ยังไม่ได้ตั้งค่าโทเคน';
     for (const rule of ['offline', 'sensor', 'tank']) $('rule-' + rule).checked = s.rules[rule];
     $('rule-critical').checked = s.rules.critical !== false;
-    for (const key of Object.keys(metrics)) { const t = s.thresholds[key]; $('threshold-' + key + '-enabled').checked = t.enabled; for (const suffix of ['min', 'max', 'holdSeconds']) $('threshold-' + key + '-' + suffix).value = t[suffix] ?? ''; }
+    for (const key of Object.keys(metrics)) { const t = s.thresholds[key], toggle = $('threshold-' + key + '-enabled'); toggle.checked = t.enabled; syncThresholdEditor(toggle); for (const suffix of ['min', 'max', 'holdSeconds']) $('threshold-' + key + '-' + suffix).value = t[suffix] ?? ''; }
     dirty = false;
   }
   async function refresh() {

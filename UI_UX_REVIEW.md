@@ -103,3 +103,23 @@ The local Docker daemon was unavailable during this pass, so browser review used
 - Stacked the Alarms severity filter and search input vertically on narrow screens and increased their tap height.
 - Rebuilt the `icemaker` service to serve the updated stylesheet.
 - Rechecked the four pages in Chromium at 320px and 390px: no horizontal overflow and no browser errors; Alarms controls render one per row.
+
+## 2026-10-30 alarm branch context
+
+- Alarm rows now show machine name, branch/location, event type, and timestamp. Branch is resolved from the machine list; devices without a configured location display “ไม่ระบุสาขา”.
+- Updated the alarm table heading to state the machine, branch, and event type fields explicitly.
+- Rendered a representative alarm row with a mocked device location in Chromium at 1440px and 390px. Machine, branch, type, and Bangkok-local timestamp all appeared; no browser errors or horizontal overflow. Service was brought down after the check.
+
+## 2026-10-30 Notifications UX follow-up
+
+- Added a clear LINE connection heading and compact cards for each critical threshold.
+- Threshold inputs now stay collapsed and disabled until their threshold checkbox is enabled. Enabling a threshold reveals its minimum, maximum, and confirmation-time controls; disabling it hides and disables those controls without clearing their values.
+- Kept the existing sticky save/test actions and LINE setup guide. No backend code changed, no settings were saved, and no real LINE test message was sent during the review.
+- Chromium review at 390px and 1440px found no browser errors or horizontal overflow. On the current settings, the mobile document height fell from 3,326px to 2,245px; opening a threshold reveals its fields and closing it collapses them again.
+
+## 2026-10-30 Notifications visual redesign
+
+- Rebuilt the notification form hierarchy around the LINE enable state, connection credentials, event choices, and threshold settings. Added event descriptions, connection status, two-column credentials/desktop threshold cards, and single-column mobile cards.
+- Kept threshold controls collapsed and disabled until enabled. Kept save and test actions sticky, but changed the sticky edge so actions appear only when the user scrolls near them instead of covering the initial form fields.
+- Chromium review at 390px and 1440px: no browser errors or horizontal overflow. Verified all four threshold toggles reveal enabled controls and collapse/disable them again. No form was submitted and no LINE message was sent. `/api/health` returned 200.
+- Grouped the saved-token removal checkbox directly with the access-token field; on mobile, the recipient field follows as its own full-width control.
